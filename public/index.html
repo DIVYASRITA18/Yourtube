@@ -1,0 +1,23 @@
+<!DOCTYPE html><html lang="en" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>YouTube 2.0</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem("theme")||"dark"</script>
+<link rel="stylesheet" href="/style.css"></head><body>
+<main>
+  <div class="row" style="justify-content:space-between"><h2>Videos</h2><input id="q" placeholder="Search videos..." style="min-width:220px"></div>
+  <div id="list" class="grid"></div>
+</main>
+<script src="/config.js"></script><script src="/app.js"></script>
+<script>
+renderNav("home");
+async function load(q=""){
+  const list=$("#list");
+  try{
+    const vids=await api("/videos"+(q?"?q="+encodeURIComponent(q):""));
+    list.innerHTML=vids.length?vids.map(v=>`<a class="vcard" href="/watch.html?id=${v._id}">
+      <div class="th"><img class="thumb" src="${esc(v.thumbnail)}" alt="" loading="lazy">${v.minPlan!=="free"?`<span class="badge ${v.minPlan} lock">🔒 ${esc(v.minPlan)}</span>`:""}</div>
+      <div class="info"><b>${esc(v.title)}</b><div class="muted small">${esc(v.channel)} • ${v.views} views • ${fmtTime(v.duration)}</div></div></a>`).join(""):"<p class='muted'>No videos found.</p>";
+  }catch(e){list.innerHTML=`<p class="alert err">${esc(e.message)}</p>`}
+}
+let t;$("#q").oninput=e=>{clearTimeout(t);t=setTimeout(()=>load(e.target.value),300)};
+load();
+</script></body></html>

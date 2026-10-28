@@ -1,0 +1,70 @@
+<!DOCTYPE html><html lang="en" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Plans - YouTube 2.0</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem("theme")||"dark"</script>
+<link rel="stylesheet" href="/style.css"></head><body>
+<main><h1>Subscription</h1><div id="msg"></div><div id="cur"></div>
+<div class="row tabs" id="periods" style="margin:12px 0"></div>
+<div id="plans" class="plans"></div>
+<h2 style="margin-top:28px">Billing history</h2><div class="table-wrap"><table><thead><tr><th>Invoice</th><th>Plan</th><th>Amount</th><th>Order / Payment ID</th><th>Status</th><th>Valid</th><th>Date</th></tr></thead><tbody id="hist"></tbody></table></div></main>
+<script src="/config.js"></script><script src="/app.js"></script>
+<script>
+renderNav("plans"); if(!requireLogin()) throw 0;
+let PL={},DEMO=false,period="monthly",ME=null,busy=false;
+const msg=(t,c="okk")=>$("#msg").innerHTML=t?`<div class="alert ${c}">${esc(t)}</div>`:"";
+const loadRzp=()=>new Promise(r=>{if(window.Razorpay)return r(true);const s=document.createElement("script");s.src="https://checkout.razorpay.com/v1/checkout.js";s.onload=()=>r(true);s.onerror=()=>r(false);document.body.appendChild(s)});
+async function refresh(){
+  const [p,m,h]=await Promise.all([api("/subscription/plans"),api("/subscription/me"),api("/subscription/history")]);
+  PL=p.plans;DEMO=p.demo;ME=m;
+  localStorage.setItem("user",JSON.stringify({...me(),plan:m.plan}));
+  $("#cur").innerHTML=`<div class="card"><h3 style="margin-top:0">Current plan: <span class="badge ${m.plan}">${esc(m.plan.toUpperCase())}</span></h3>
+    ${m.expiry?`<p>Period: ${esc(m.period)} • Started ${esc(fmtDate(m.start))}<br>Valid until <b>${esc(new Date(m.expiry).toDateString())}</b> (${m.daysLeft} days left)<br>
+    ${m.nextRenewal?`Next renewal: ${esc(new Date(m.nextRenewal).toDateString())}`:"Auto-renew is OFF - the plan will drop to Free on expiry."}</p>`:"<p>You are on the Free plan.</p>"}
+    <ul>${m.features.map(f=>`<li>${esc(f)}</li>`).join("")}</ul>
+    ${m.plan!=="free"&&m.autoRenew?'<button id="cancel" class="danger">Cancel auto-renew</button>':""}
+    ${DEMO?'<p class="small muted">Demo payment mode: no Razorpay keys are set in .env, so a fake checkout is used.</p>':""}</div>`;
+  const c=$("#cancel"); if(c)c.onclick=async()=>{ if(!confirm("Turn off auto-renew? You keep access until expiry."))return; const d=await api("/subscription/cancel",{method:"POST"}); msg(d.message); refresh()};
+  $("#periods").innerHTML=["monthly","quarterly","yearly"].map(x=>`<button data-p="${x}" class="${x===period?"on":""}">${x[0].toUpperCase()+x.slice(1)}</button>`).join("");
+  $$("#periods button").forEach(b=>b.onclick=()=>{period=b.dataset.p;refresh()});
+  $("#plans").innerHTML=Object.entries(PL).map(([k,p])=>{
+    const cur=m.plan===k, rank=PL[m.plan].rank;
+    let label=cur?"Renew":rank>p.rank?"Downgrade":"Upgrade", dis=(cur&&!m.renewEligible)||k==="free";
+    return `<div class="card plan ${cur?"current":""}"><h3 style="margin-top:0"><span class="badge ${k}">${esc(p.name)}</span> ${cur?"(current)":""}</h3>
+      <div class="price">₹${p.price[period]}<small class="muted"> /${period}</small></div>
+      <ul>${p.features.map(f=>`<li>${esc(f)}</li>`).join("")}</ul>
+      ${k==="free"?"":`<button class="primary" data-buy="${k}" ${dis?"disabled":""} title="${cur&&!m.renewEligible?"Renewal opens in the last 7 days":""}">${label}</button>`}</div>`}).join("");
+  $$("[data-buy]").forEach(b=>b.onclick=()=>buy(b.dataset.buy));
+  $("#hist").innerHTML=h.length?h.map(t=>`<tr><td>${esc(t.invoiceNumber||"-")}</td><td>${esc(t.plan)} (${esc(t.period)})</td><td>₹${t.amount}</td>
+    <td class="small">${esc(t.orderId)}<br>${esc(t.paymentId||"-")}</td><td><span class="badge ${t.status==="paid"?"ok":t.status==="created"?"warn":"bad"}">${esc(t.status)}</span>${t.failureReason?`<div class="small muted">${esc(t.failureReason)}</div>`:""}</td>
+    <td class="small">${t.startDate?esc(new Date(t.startDate).toDateString())+" → "+esc(new Date(t.expiryDate).toDateString()):"-"}</td><td class="small">${esc(fmtDate(t.createdAt))}</td></tr>`).join(""):"<tr><td colspan=7 class='muted'>No payments yet.</td></tr>";
+}
+const post=(p,b)=>api("/subscription/"+p,{method:"POST",body:b});
+async function verify(resp){
+  try{await post("verify",resp);msg("Payment successful! Your plan is active. An invoice was emailed to you.");}
+  catch(e){msg("Payment went through but verification failed: "+e.message+" (Payment ID: "+resp.razorpay_payment_id+")","err")}
+  refresh();
+}
+async function buy(plan){
+  if(busy)return; busy=true; msg("");
+  try{
+    const o=await post("order",{plan,period});
+    if(o.demo){ demoCheckout(o,plan); return; }
+    if(!(await loadRzp()))throw new Error("Could not load Razorpay. Check your internet connection.");
+    const rz=new Razorpay({key:o.keyId,amount:o.amount,currency:o.currency,name:"YouTube 2.0",description:`${plan} - ${period}`,order_id:o.orderId,
+      prefill:{name:me().name,email:me().email},handler:verify,
+      modal:{ondismiss:()=>{post("failed",{orderId:o.orderId,reason:"User closed the payment window",cancelled:true}).then(refresh);msg("Payment cancelled.","err")}},theme:{color:"#cc0000"}});
+    rz.on("payment.failed",r=>{post("failed",{orderId:o.orderId,reason:r.error.description}).then(refresh);msg("Payment failed: "+r.error.description,"err")});
+    rz.open();
+  }catch(e){msg(e.message,"err")}finally{busy=false}
+}
+function demoCheckout(o,plan){
+  const bg=document.createElement("div");bg.className="modal-bg";
+  bg.innerHTML=`<div class="modal"><h3>Demo checkout</h3><p>Pay <b>₹${o.amount/100}</b> for <b>${esc(plan)}</b> (${esc(period)})?</p>
+    <div class="row"><button class="primary ok">Pay (success)</button><button class="fail">Simulate failure</button><button class="x">Cancel</button></div></div>`;
+  document.body.appendChild(bg);
+  const close=()=>{bg.remove();busy=false};
+  $(".ok",bg).onclick=()=>{close();verify({razorpay_order_id:o.orderId,razorpay_payment_id:"demo_pay_"+Math.random().toString(16).slice(2,10),razorpay_signature:"demo"})};
+  $(".fail",bg).onclick=async()=>{close();await post("failed",{orderId:o.orderId,reason:"Simulated failure"});msg("Payment failed (simulated).","err");refresh()};
+  $(".x",bg).onclick=async()=>{close();await post("failed",{orderId:o.orderId,reason:"Cancelled by user",cancelled:true});msg("Payment cancelled.","err");refresh()};
+}
+refresh().catch(e=>msg(e.message,"err"));
+</script></body></html>

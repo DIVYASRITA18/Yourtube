@@ -1,0 +1,43 @@
+<!DOCTYPE html><html lang="en" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Watch - YouTube 2.0</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem("theme")||"dark"</script>
+<link rel="stylesheet" href="/style.css">
+<style>body.theater main{max-width:none;padding:0 0 16px}body.theater .watch>*:not(#playerWrap){margin:0 16px}body.theater .player{max-height:85vh;aspect-ratio:auto;height:80vh}
+.side-next a{display:flex;gap:10px;color:var(--text)}.side-next img{width:140px;border-radius:8px}</style></head><body>
+<main><div class="watch">
+  <div id="playerWrap"><div class="card muted">Loading...</div></div>
+  <div id="info"></div>
+  <div id="comments" class="card"></div>
+</div></main>
+<script src="/config.js"></script><script src="/app.js"></script><script src="/player.js"></script><script src="/comments.js"></script>
+<script>
+renderNav("");
+const id=new URLSearchParams(location.search).get("id");
+(async()=>{
+  try{
+    const data=await api("/videos/"+id);
+    const v=data.video;
+    initPlayer($("#playerWrap"),data);
+    $("#info").innerHTML=`<div class="card"><h2 style="margin-top:0">${esc(v.title)} <span id="doneBadge" class="badge ok" hidden>✔ Completed</span></h2>
+      <div class="muted small">${esc(v.channel)} • ${v.views+1} views ${v.minPlan!=="free"?`• <span class="badge ${v.minPlan}">${esc(v.minPlan)}</span>`:""}</div>
+      <p>${esc(v.description)}</p>
+      <div class="row"><button class="primary" id="dl">⬇ Download</button><span id="quota" class="small muted"></span>
+      ${data.next?`<span class="side-next small muted">Up next: <a href="/watch.html?id=${data.next._id}">${esc(data.next.title)}</a></span>`:""}</div></div>`;
+    if(data.progress?.completed)$("#doneBadge").hidden=false;
+    async function quota(){ if(!token())return; try{const q=await api("/downloads/quota");$("#quota").textContent=`${q.plan} plan: ${q.remaining} of ${q.limit} downloads left today`}catch{} }
+    quota();
+    $("#dl").onclick=async()=>{ if(!requireLogin())return; $("#dl").disabled=true;
+      try{const d=await api("/downloads/request",{method:"POST",body:{videoId:v._id,deviceId:deviceId()}});
+        toast("Download started"+(d.countedAgainstQuota?"":" (already downloaded recently, no extra quota used)"),"success");
+        location.href=(window.API_BASE||"")+d.url; setTimeout(quota,3000);
+      }catch(e){toast(e.message,"error")} setTimeout(()=>$("#dl").disabled=false,2500)};
+    initComments($("#comments"),v._id);
+  }catch(e){
+    $("#comments").remove();
+    const d=e.data||{};
+    $("#playerWrap").innerHTML=`<div class="card" style="text-align:center">${d.video?`<img src="${esc(d.video.thumbnail)}" style="max-width:360px;border-radius:10px;filter:grayscale(.7)">`:""}
+      <h2>🔒 ${esc(d.video?.title||"Video unavailable")}</h2><p>${esc(e.message)}</p>
+      <a class="btn primary" href="/subscription.html">View plans</a> ${token()?"":`<a class="btn" href="/login.html?next=${encodeURIComponent(location.pathname+location.search)}">Login</a>`}</div>`;
+  }
+})();
+</script></body></html>

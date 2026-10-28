@@ -1,0 +1,28 @@
+<!DOCTYPE html><html lang="en" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Downloads - YouTube 2.0</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem("theme")||"dark"</script>
+<link rel="stylesheet" href="/style.css"></head><body>
+<main><h1>My Downloads</h1><div id="msg"></div><div id="quota" class="card"></div>
+<h2>History</h2><div class="table-wrap"><table><thead><tr><th>Video</th><th>Downloaded</th><th>Status</th><th>Size</th><th>Plan used</th><th>Quota</th><th></th></tr></thead><tbody id="rows"></tbody></table></div></main>
+<script src="/config.js"></script><script src="/app.js"></script>
+<script>
+renderNav("downloads"); if(!requireLogin()) throw 0;
+const cls={completed:"ok",started:"warn",interrupted:"bad",failed:"bad"};
+async function load(){
+  try{
+    const {downloads,quota:q}=await api("/downloads");
+    $("#quota").innerHTML=`<b>${esc(q.plan.toUpperCase())}</b> plan • Used today: <b>${q.used}</b> of <b>${q.limit>=999?"unlimited":q.limit}</b> • Remaining: <b>${q.limit>=999?"unlimited":q.remaining}</b>
+      <div class="small muted">Quota resets at ${esc(fmtDate(q.resetsAt))} (midnight IST). Interrupted or failed downloads do not use quota.</div>
+      ${q.remaining===0?'<a class="btn primary sm" href="/subscription.html">Upgrade for more downloads</a>':""}`;
+    $("#rows").innerHTML=downloads.length?downloads.map(d=>`<tr><td><div class="row"><img src="${esc(d.thumbnail)}" width="90" style="border-radius:6px" alt=""><a href="/watch.html?id=${d.video}">${esc(d.videoTitle)}</a></div></td>
+      <td class="small">${esc(fmtDate(d.createdAt))}<div class="muted">${esc(d.browser||"")} • ${esc(d.device||"")}</div></td>
+      <td><span class="badge ${cls[d.status]||""}">${esc(d.status)}</span></td><td>${fmtSize(d.size)}</td><td><span class="badge ${d.plan}">${esc(d.plan)}</span></td>
+      <td class="small">${d.countsToQuota?"Used 1":"Not counted"}</td><td><button class="sm again" data-v="${d.video}">${d.status==="completed"?"Download again":"Retry"}</button></td></tr>`).join("")
+      :"<tr><td colspan=7 class='muted'>No downloads yet. Open a video and press Download.</td></tr>";
+    $$(".again").forEach(b=>b.onclick=async()=>{ b.disabled=true;
+      try{const d=await api("/downloads/request",{method:"POST",body:{videoId:b.dataset.v,deviceId:deviceId()}});toast("Download started","success");location.href=(window.API_BASE||"")+d.url;setTimeout(load,3000)}
+      catch(e){toast(e.message,"error")} setTimeout(()=>b.disabled=false,2500)});
+  }catch(e){$("#msg").innerHTML=`<div class="alert err">${esc(e.message)}</div>`}
+}
+load();
+</script></body></html>

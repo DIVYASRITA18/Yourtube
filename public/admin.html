@@ -1,0 +1,27 @@
+<!DOCTYPE html><html lang="en" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin - YouTube 2.0</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem("theme")||"dark"</script>
+<link rel="stylesheet" href="/style.css"></head><body>
+<main><h1>Moderation</h1><div id="msg"></div>
+<div class="row tabs"><button data-s="open" class="on">Open reports</button><button data-s="actioned">Actioned</button><button data-s="dismissed">Dismissed</button><button data-s="log">Moderation log</button></div>
+<div id="out" style="margin-top:12px"></div></main>
+<script src="/config.js"></script><script src="/app.js"></script>
+<script>
+renderNav("admin"); if(!requireLogin()) throw 0;
+let tab="open";
+async function load(){
+  const out=$("#out");
+  try{
+    if(tab==="log"){ const l=await api("/admin/modlog"); out.innerHTML=`<div class="table-wrap"><table><thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Note</th></tr></thead><tbody>${l.map(x=>`<tr><td>${esc(fmtDate(x.createdAt))}</td><td>${esc(x.adminName)}</td><td>${esc(x.action)}</td><td>${esc(x.note||"")}</td></tr>`).join("")||"<tr><td colspan=4 class=muted>Empty</td></tr>"}</tbody></table></div>`; return; }
+    const r=await api("/admin/reports?status="+tab);
+    out.innerHTML=r.length?r.map(x=>`<div class="card" style="margin-bottom:10px"><div class="row" style="justify-content:space-between"><b>@${esc(x.comment.username)}</b>
+      <span><span class="badge warn">${esc(x.reason)}</span><span class="badge">${x.comment.reportCount} report(s)</span>${x.comment.hidden?'<span class="badge bad">hidden</span>':""}</span></div>
+      <p style="white-space:pre-wrap">${esc(x.comment.text)}</p><div class="small muted">Reported by @${esc(x.reporter?.username||"?")} on ${esc(fmtDate(x.createdAt))}${x.details?" — "+esc(x.details):""}</div>
+      ${tab==="open"?`<div class="row" style="margin-top:8px"><input placeholder="Note (optional)" class="note"><button class="danger sm" data-a="remove" data-id="${x._id}">Remove comment</button><button class="sm" data-a="dismiss" data-id="${x._id}">Dismiss</button><button class="sm" data-h="${x.comment._id}">History</button></div>`:""}</div>`).join(""):"<p class='muted'>Nothing here.</p>";
+    $$("[data-a]").forEach(b=>b.onclick=async()=>{try{await api("/admin/reports/"+b.dataset.id,{method:"POST",body:{action:b.dataset.a,note:b.closest(".card").querySelector(".note").value}});toast("Done","success");load()}catch(e){toast(e.message,"error")}});
+    $$("[data-h]").forEach(b=>b.onclick=async()=>{const h=await api("/admin/comment/"+b.dataset.h+"/history");alert((h.history||[]).map(x=>`${fmtDate(x.at)} [${x.action}]\n${x.text}`).join("\n\n")||"No history")});
+  }catch(e){$("#msg").innerHTML=`<div class="alert err">${esc(e.message)}</div>`}
+}
+$$(".tabs button").forEach(b=>b.onclick=()=>{$$(".tabs button").forEach(x=>x.classList.remove("on"));b.classList.add("on");tab=b.dataset.s;load()});
+load();
+</script></body></html>

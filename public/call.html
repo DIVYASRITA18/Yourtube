@@ -1,0 +1,40 @@
+<!DOCTYPE html><html lang="en" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Video call - YouTube 2.0</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem("theme")||"dark"</script>
+<link rel="stylesheet" href="/style.css"></head><body>
+<main>
+ <div id="lobby" class="card center-box" style="max-width:540px">
+  <h2 style="margin-top:0">Video call</h2>
+  <p class="muted small">One-to-one or group calls (up to 6 people). Peer-to-peer media is encrypted by WebRTC (DTLS-SRTP).</p>
+  <div id="lmsg"></div>
+  <button class="primary" id="create" style="width:100%">Create a new meeting</button>
+  <p class="muted" style="text-align:center">or join with a meeting link / room ID</p>
+  <div class="row"><input id="roomIn" placeholder="Room ID e.g. team-sync-42" style="flex:1"><button id="join">Join</button></div>
+  <video id="preview" muted playsinline autoplay style="width:100%;border-radius:10px;background:#000;margin-top:12px;max-height:260px"></video>
+  <div class="row"><label class="small"><input type="checkbox" id="pvCam" checked> Camera on</label><label class="small"><input type="checkbox" id="pvMic" checked> Microphone on</label></div>
+ </div>
+
+ <div id="callUI" hidden>
+  <div class="row" style="justify-content:space-between;margin-bottom:8px">
+    <div class="row"><b id="roomName"></b><button class="sm" id="copyLink">Copy invite link</button><span id="dur" class="badge">00:00</span><span id="roleBadge" class="badge"></span><span id="lockBadge" class="badge warn" hidden>🔒 Locked</span><span id="recBadge" class="badge bad" hidden>● REC</span></div>
+    <div id="banner"></div></div>
+  <div class="call">
+    <div class="vgrid" id="grid"></div>
+    <div class="side">
+      <div class="tabs"><button data-p="people" class="on">People (<span id="pc">1</span>)</button><button data-p="chat">Chat</button></div>
+      <div class="pane" id="panePeople"></div>
+      <div class="chatbox" id="paneChat" hidden>
+        <div class="msgs" id="msgs"></div>
+        <div class="emoji" id="emoji"></div>
+        <div class="send"><input type="text" id="chatIn" placeholder="Message..." maxlength="1000"><button id="chatSend" class="primary sm">Send</button><label class="btn sm" style="cursor:pointer">📎<input type="file" id="fileIn" hidden></label></div>
+      </div>
+    </div>
+  </div>
+  <div class="ctl">
+    <button id="bMic">🎤 Mute</button><button id="bCam">📷 Camera off</button><button id="bSwitch" hidden>🔄 Flip camera</button>
+    <button id="bScreen">🖥 Share screen</button><button id="bHand">✋ Raise hand</button><button id="bLow">📉 Low data</button>
+    <button id="bRec" hidden>⏺ Record</button><button id="bLeave" class="danger">📞 Leave</button>
+  </div>
+ </div>
+</main>
+<script src="/config.js"></script><script src="/app.js"></script><script src="/call.js"></script></body></html>

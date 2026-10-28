@@ -1,0 +1,50 @@
+<!DOCTYPE html><html lang="en" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Login - YouTube 2.0</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem("theme")||"dark"</script>
+<link rel="stylesheet" href="/style.css"></head><body>
+<main><div class="center-box card">
+  <div class="tabs row"><button id="tL" class="on">Login</button><button id="tR">Register</button></div>
+  <div id="msg"></div>
+
+  <form id="fLogin"><h3>Welcome back</h3>
+    <input id="lEmail" type="email" placeholder="Email" required autocomplete="email">
+    <input id="lPass" type="password" placeholder="Password" required autocomplete="current-password">
+    <button class="primary" style="width:100%;margin-top:8px">Login</button>
+    <p class="small muted">Admin demo: admin@demo.com / Admin@123</p></form>
+
+  <form id="fReg" hidden><h3>Create account</h3>
+    <input id="rName" placeholder="Full name" required>
+    <input id="rUser" placeholder="Username (for @mentions)" required pattern="[a-zA-Z0-9_.\-]{3,20}">
+    <input id="rEmail" type="email" placeholder="Email" required>
+    <input id="rPass" type="password" placeholder="Password (min 6)" minlength="6" required>
+    <button class="primary" style="width:100%;margin-top:8px">Register</button></form>
+
+  <form id="fOtp" hidden><h3>Verify it's you</h3>
+    <p id="otpWhy" class="muted small"></p>
+    <input id="otp" inputmode="numeric" maxlength="6" placeholder="6-digit code" required autocomplete="one-time-code">
+    <label class="small"><input type="checkbox" id="trust" checked> Trust this browser for 30 days</label>
+    <button class="primary" style="width:100%;margin-top:8px">Verify &amp; continue</button></form>
+</div></main>
+<script src="/config.js"></script><script src="/app.js"></script>
+<script>
+renderNav("");
+let next=new URLSearchParams(location.search).get("next")||"/";
+if(!/^\/(?!\/)/.test(next)) next="/"; // only same-site paths
+const msg=(t,c="err")=>$("#msg").innerHTML=t?`<div class="alert ${c}">${esc(t)}</div>`:"";
+const show=id=>{["fLogin","fReg","fOtp"].forEach(f=>$("#"+f).hidden=f!==id);msg("")};
+$("#tL").onclick=()=>{show("fLogin");$("#tL").classList.add("on");$("#tR").classList.remove("on")};
+$("#tR").onclick=()=>{show("fReg");$("#tR").classList.add("on");$("#tL").classList.remove("on")};
+let otpId=null;
+function done(d){localStorage.setItem("token",d.token);localStorage.setItem("user",JSON.stringify(d.user));applyTheme(d.user.theme);location.href=next}
+$("#fLogin").onsubmit=async e=>{e.preventDefault();msg("");
+  try{const d=await api("/auth/login",{method:"POST",body:{email:$("#lEmail").value,password:$("#lPass").value,deviceId:deviceId()}});
+    if(d.otpRequired){otpId=d.otpId;show("fOtp");$("#otpWhy").textContent="We noticed a "+d.reason+". Enter the code sent to your email.";
+      if(d.devOtp)msg("Dev mode: email not configured, your code is "+d.devOtp+" (also printed in the server console).","okk");}
+    else done(d);
+  }catch(err){msg(err.message)}};
+$("#fOtp").onsubmit=async e=>{e.preventDefault();
+  try{done(await api("/auth/verify-otp",{method:"POST",body:{otpId,code:$("#otp").value,trustDevice:$("#trust").checked}}))}catch(err){msg(err.message)}};
+$("#fReg").onsubmit=async e=>{e.preventDefault();
+  try{const d=await api("/auth/register",{method:"POST",body:{name:$("#rName").value,username:$("#rUser").value,email:$("#rEmail").value,password:$("#rPass").value}});
+    $("#tL").click();msg(d.message,"okk");$("#lEmail").value=$("#rEmail").value}catch(err){msg(err.message)}};
+</script></body></html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html><html lang="en" data-theme="dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Account security - YouTube 2.0</title>
+<script>document.documentElement.dataset.theme=localStorage.getItem("theme")||"dark"</script>
+<link rel="stylesheet" href="/style.css"></head><body>
+<main><h1>Account security</h1><div id="msg"></div>
+<div class="card"><h3 style="margin-top:0">Theme</h3><p class="small muted">Automatic: light theme for logins between 5:00 AM and 12:00 PM IST, dark otherwise. Choose Light or Dark to override on all your devices.</p>
+ <div class="row tabs" id="themes"><button data-t="auto">Automatic</button><button data-t="light">Light</button><button data-t="dark">Dark</button></div></div>
+<div class="card" style="margin-top:14px"><h3 style="margin-top:0">Trusted devices</h3><p class="small muted">Trusted browsers skip the OTP step for <span id="td"></span> days.</p>
+ <div id="devs"></div><button class="danger" id="outAll" style="margin-top:10px">Log out of all sessions</button></div>
+<h2>Login history</h2><div class="table-wrap"><table><thead><tr><th>Time</th><th>Status</th><th>IP</th><th>Browser / OS</th><th>Device</th><th>Location</th></tr></thead><tbody id="logs"></tbody></table></div></main>
+<script src="/config.js"></script><script src="/app.js"></script>
+<script>
+renderNav("security"); if(!requireLogin()) throw 0;
+const st={success:["ok","Login OK"],otp_required:["warn","OTP required"],otp_verified:["ok","OTP verified"],otp_failed:["bad","OTP failed"],bad_password:["bad","Wrong password"]};
+async function load(){
+  try{
+    const [s,u]=await Promise.all([api("/auth/security"),api("/auth/me")]);
+    $("#td").textContent=s.trustDays;
+    $$("#themes button").forEach(b=>b.classList.toggle("on",b.dataset.t===(u.themeManual?u.theme:"auto")));
+    $("#devs").innerHTML=s.devices.length?s.devices.map(d=>`<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--border);padding:6px 0">
+      <span>${esc(d.label)} ${d.deviceId===deviceId()?'<span class="badge ok">this device</span>':""}<div class="small muted">Trusted until ${esc(fmtDate(d.expiresAt))}</div></span>
+      <button class="sm danger" data-d="${esc(d.deviceId)}">Remove</button></div>`).join(""):"<p class='muted'>No trusted devices.</p>";
+    $$("[data-d]").forEach(b=>b.onclick=async()=>{await api("/auth/security/device/"+encodeURIComponent(b.dataset.d),{method:"DELETE"});load()});
+    $("#logs").innerHTML=s.logs.map(l=>{const [c,t]=st[l.status]||["",l.status];return `<tr><td class="small">${esc(fmtDate(l.createdAt))}</td><td><span class="badge ${c}">${t}</span></td><td>${esc(l.ip)}</td>
+      <td>${esc(l.browser)}<div class="small muted">${esc(l.os)}</div></td><td>${esc(l.deviceType)} ${esc(l.deviceModel||"")}</td>
+      <td>${esc([l.city,l.state,l.country].filter(Boolean).join(", "))}<div class="small muted">${esc(l.approx||"")}</div></td></tr>`}).join("");
+  }catch(e){$("#msg").innerHTML=`<div class="alert err">${esc(e.message)}</div>`}
+}
+$$("#themes button").forEach(b=>b.onclick=async()=>{const u=await api("/auth/theme",{method:"PUT",body:{theme:b.dataset.t}});applyTheme(u.theme);localStorage.setItem("user",JSON.stringify(u));toast("Theme saved","success");load()});
+$("#outAll").onclick=async()=>{if(!confirm("Log out everywhere, including this device?"))return;await api("/auth/security/logout-all",{method:"POST"});logoutLocal();location.href="/login.html"};
+load();
+</script></body></html>
